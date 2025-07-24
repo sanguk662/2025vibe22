@@ -2,92 +2,94 @@ import streamlit as st
 import random
 import time
 
-st.set_page_config(page_title="폭탄 피하기 게임 💣", layout="wide")
+st.set_page_config(layout="wide")
 st.title("💣 폭탄 피하기 게임")
 
-# 게임 설정
-BOARD_WIDTH = 10
-BOARD_HEIGHT = 15
-BOMB_EMOJI = "💣"
-PLAYER_EMOJI = "😀"
-
-if "player_x" not in st.session_state:
-    st.session_state.player_x = BOARD_WIDTH // 2
+# ---------------- 세션 초기화 ---------------- #
+if "player_pos" not in st.session_state:
+    st.session_state.player_pos = 2
+if "bombs" not in st.session_state:
     st.session_state.bombs = []
-    st.session_state.game_over = False
+if "score" not in st.session_state:
     st.session_state.score = 0
-    st.session_state.last_update = time.time()
+if "game_over" not in st.session_state:
+    st.session_state.game_over = False
 
-# 폭탄 생성 확률
-BOMB_PROB = 0.15
-UPDATE_INTERVAL = 0.5  # 초
+cols = st.columns(5)
 
-def new_frame():
-    # 폭탄 아래로 이동
+def draw_board():
+    board = [["⬜" for _ in range(5)] for _ in range(6)]
+    for b in st.session_state.bombs:
+        if 0 <= b[0] < 6:
+            board[b[0]][b[1]] = "💣"
+    board[5][st.session_state.player_pos] = "😃"
+    for row in board:
+        st.write("".join(row))
+
+def drop_bomb():
+    if random.random() < 0.5:
+        st.session_state.bombs.append([0, random.randint(0, 4)])
     new_bombs = []
-    for x, y in st.session_state.bombs:
-        if y + 1 < BOARD_HEIGHT:
-            new_bombs.append((x, y + 1))
-    st.session_state.bombs = new_bombs
-
-    # 폭탄 새로 생성
-    for i in range(BOARD_WIDTH):
-        if random.random() < BOMB_PROB:
-            st.session_state.bombs.append((i, 0))
-
-    # 충돌 체크
-    for x, y in st.session_state.bombs:
-        if y == BOARD_HEIGHT - 1 and x == st.session_state.player_x:
+    for b in st.session_state.bombs:
+        b[0] += 1
+        if b[0] == 5 and b[1] == st.session_state.player_pos:
             st.session_state.game_over = True
-            return
-
+        elif b[0] < 6:
+            new_bombs.append(b)
+    st.session_state.bombs = new_bombs
     st.session_state.score += 1
 
-# 키 조작 처리
-key = st.session_state.get("key")
-if key == "left" and st.session_state.player_x > 0:
-    st.session_state.player_x -= 1
-elif key == "right" and st.session_state.player_x < BOARD_WIDTH - 1:
-    st.session_state.player_x += 1
-st.session_state.key = None  # 초기화
+def move_player(direction):
+    if direction == "left" and st.session_state.player_pos > 0:
+        st.session_state.player_pos -= 1
+    elif direction == "right" and st.session_state.player_pos < 4:
+        st.session_state.player_pos += 1
 
-# 시간 경과 확인하여 업데이트
-if not st.session_state.game_over:
-    now = time.time()
-    if now - st.session_state.last_update > UPDATE_INTERVAL:
-        new_frame()
-        st.session_state.last_update = now
+def reset_game():
+    st.session_state.player_pos = 2
+    st.session_state.bombs = []
+    st.session_state.score = 0
+    st.session_state.game_over = False
 
-# 보드 출력
-for y in range(BOARD_HEIGHT):
-    cols = st.columns(BOARD_WIDTH)
-    for x in range(BOARD_WIDTH):
-        cell = ""
-        if (x, y) in st.session_state.bombs:
-            cell = BOMB_EMOJI
-        elif y == BOARD_HEIGHT - 1 and x == st.session_state.player_x:
-            cell = PLAYER_EMOJI
-        cols[x].markdown(f"<div style='text-align:center; font-size:24px'>{cell}</div>", unsafe_allow_html=True)
+draw_board()
+st.markdown(f"### 점수: {st.session_state.score}")
 
-# 조작 버튼
-st.markdown("<hr>")
-c1, c2, c3 = st.columns([2, 1, 2])
+# ---------------- 키보드 이벤트 ---------------- #
+st.markdown("""
+    <script>
+    document.addEventListener('keydown', function(e) {
+        let d = '';
+        if (e.key === 'a') { d = 'left'; }
+        else if (e.key === 'd') { d = 'right'; }
+        if (d !== '') {
+            fetch(`/?move=` + d);
+        }
+    });
+    </script>
+""", unsafe_allow_html=True)
+
+query_params = st.experimental_get_query_params()
+if 'move' in query_params:
+    direction = query_params['move'][0]
+    move_player(direction)
+    st.experimental_set_query_params()  # clear query param
+
+# ---------------- 조작 버튼 ---------------- #
+c1, c2, c3 = st.columns([1,2,1])
 with c1:
     if st.button("⬅️ 왼쪽"):
-        st.session_state.key = "left"
-with c2:
-    st.markdown(f"**점수: {st.session_state.score}**")
+        move_player("left")
 with c3:
     if st.button("➡️ 오른쪽"):
-        st.session_state.key = "right"
+        move_player("right")
 
-# 게임 오버 처리
-if st.session_state.game_over:
-    st.error(f"💥 게임 오버! 최종 점수: {st.session_state.score}")
-    if st.button("🔄 다시 시작"):
-        for k in ["player_x", "bombs", "game_over", "score"]:
-            del st.session_state[k]
+# ---------------- 게임 루프 ---------------- #
+if not st.session_state.game_over:
+    drop_bomb()
+    time.sleep(0.3)
+    st.experimental_rerun()
+else:
+    st.error("💥 게임 오버! 새로 시작을 눌러주세요.")
+    if st.button("🔄 새로 시작"):
+        reset_game()
         st.experimental_rerun()
-
-# 자동 새로고침
-st.experimental_rerun()
