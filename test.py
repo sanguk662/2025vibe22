@@ -1,6 +1,7 @@
 import streamlit as st
 import random
 import base64
+import os
 
 st.set_page_config(layout="wide")
 
@@ -18,7 +19,7 @@ TOOLS = {
     "🦖 공룡 발톱": {"cracks": ["assets/cracks/dino1.png"], "sound": "assets/sounds/dino.mp3", "score": 12}
 }
 
-# 배경 이미지 설정
+# 배경 이미지 적용 함수
 def set_background(image_path):
     with open(image_path, "rb") as image_file:
         encoded = base64.b64encode(image_file.read()).decode()
@@ -56,15 +57,38 @@ def render_crack(x, y, img_path):
         </div>
     """, unsafe_allow_html=True)
 
-# 세션 초기화
+# 세션 상태 초기화
 if "cracks" not in st.session_state:
     st.session_state.cracks = []
 
 if "score" not in st.session_state:
     st.session_state.score = 0
 
-# 배경 적용
-set_background("assets/background.jpg")  # << 여기 경로는 변경하지 마!
+# ✅ 배경 이미지 처리 (assets 없으면 대체)
+DEFAULT_BG = "assets/background.jpg"
+
+if os.path.exists(DEFAULT_BG):
+    set_background(DEFAULT_BG)
+else:
+    uploaded_bg = st.file_uploader("배경 이미지를 업로드하세요 (jpg/png)", type=["jpg", "png"])
+    if uploaded_bg:
+        bg_bytes = uploaded_bg.read()
+        encoded = base64.b64encode(bg_bytes).decode()
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background-image: url("data:image/jpg;base64,{encoded}");
+                background-size: cover;
+                background-repeat: no-repeat;
+                background-position: center;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.warning("⚠️ 배경 이미지가 없습니다. 업로드하거나 assets/background.jpg를 추가하세요.")
 
 # 타이틀 및 점수 표시
 st.markdown("""
@@ -81,7 +105,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 사이드바: 도구 선택
+# 도구 선택 및 초기화
 st.sidebar.header("🧰 도구 선택")
 tool = st.sidebar.radio("깨는 도구를 고르세요", list(TOOLS.keys()))
 
@@ -89,7 +113,7 @@ if st.sidebar.button("🔄 초기화"):
     st.session_state.cracks = []
     st.session_state.score = 0
 
-# 버튼 행
+# 메인 버튼
 cols = st.columns(12)
 for i in range(len(cols)):
     if cols[i].button("💣", key=f"btn-{i}-{random.random()}"):
