@@ -1,112 +1,118 @@
 import streamlit as st
-import base64
-import os
 import random
+import numpy as np
 
-# ---------------------- 설정 ---------------------- #
-st.set_page_config(layout="wide")
+st.set_page_config(layout="centered")
 
-TOOLS = {
-    "hammer": {"icon": "assets/tools/hammer.png", "crack": "assets/cracks/crack1.png"},
-    "gun": {"icon": "assets/tools/gun.png", "crack": "assets/cracks/crack2.png"},
-    "rock": {"icon": "assets/tools/rock.png", "crack": "assets/cracks/crack3.png"},
-    "axe": {"icon": "assets/tools/axe.png", "crack": "assets/cracks/crack4.png"},
-    "electric": {"icon": "assets/tools/electric.png", "crack": "assets/cracks/crack5.png"},
-    "ice": {"icon": "assets/tools/ice.png", "crack": "assets/cracks/crack6.png"},
-    "meteor": {"icon": "assets/tools/meteor.png", "crack": "assets/cracks/crack7.png"},
-}
+st.title("2048 숫자 합치기 게임 🎮")
 
-# ---------------------- 초기화 ---------------------- #
-if "score" not in st.session_state:
-    st.session_state.score = 0
-if "crack_count" not in st.session_state:
-    st.session_state.crack_count = 0
-if "tool" not in st.session_state:
-    st.session_state.tool = "hammer"
+SIZE = 4
 
-# ---------------------- 배경 이미지 로드 ---------------------- #
-def load_background():
-    bg_path = "assets/background.jpg"
-    if os.path.exists(bg_path):
-        with open(bg_path, "rb") as f:
-            return base64.b64encode(f.read()).decode()
+# -------------------- 초기화 -------------------- #
+if "board" not in st.session_state:
+    st.session_state.board = np.zeros((SIZE, SIZE), dtype=int)
+    def place():
+        empty = list(zip(*np.where(st.session_state.board == 0)))
+        if empty:
+            i, j = random.choice(empty)
+            st.session_state.board[i][j] = 2 if random.random() < 0.9 else 4
+    place()
+    place()
+
+# -------------------- 보드 렌더링 -------------------- #
+def draw_board():
+    for i in range(SIZE):
+        cols = st.columns(SIZE)
+        for j in range(SIZE):
+            value = st.session_state.board[i][j]
+            cell = str(value) if value != 0 else ""
+            cols[j].button(cell, key=f"{i}-{j}", disabled=True)
+
+draw_board()
+
+# -------------------- 이동 처리 -------------------- #
+def move_left():
+    moved = False
+    for i in range(SIZE):
+        tiles = st.session_state.board[i][st.session_state.board[i] != 0]
+        new_row = []
+        skip = False
+        for j in range(len(tiles)):
+            if skip:
+                skip = False
+                continue
+            if j+1 < len(tiles) and tiles[j] == tiles[j+1]:
+                new_row.append(tiles[j]*2)
+                skip = True
+                moved = True
+            else:
+                new_row.append(tiles[j])
+        new_row += [0]*(SIZE - len(new_row))
+        if not np.array_equal(st.session_state.board[i], new_row):
+            moved = True
+        st.session_state.board[i] = new_row
+    return moved
+
+def rotate_board(k):
+    st.session_state.board = np.rot90(st.session_state.board, k)
+
+def move(direction):
+    if direction == "left":
+        moved = move_left()
+    elif direction == "right":
+        rotate_board(2)
+        moved = move_left()
+        rotate_board(2)
+    elif direction == "up":
+        rotate_board(1)
+        moved = move_left()
+        rotate_board(-1)
+    elif direction == "down":
+        rotate_board(-1)
+        moved = move_left()
+        rotate_board(1)
     else:
-        uploaded = st.file_uploader("🔺 배경 이미지가 없습니다. 업로드해주세요 (JPG/PNG)", type=["jpg", "jpeg", "png"])
-        if uploaded:
-            return base64.b64encode(uploaded.read()).decode()
-    return None
+        moved = False
 
-bg_b64 = load_background()
-if bg_b64:
-    st.markdown(f"""
-        <style>
-        .stApp {{
-            background-image: url("data:image/png;base64,{bg_b64}");
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-        }}
-        </style>
-    """, unsafe_allow_html=True)
-else:
-    st.stop()
+    if moved:
+        empty = list(zip(*np.where(st.session_state.board == 0)))
+        if empty:
+            i, j = random.choice(empty)
+            st.session_state.board[i][j] = 2 if random.random() < 0.9 else 4
 
-# ---------------------- 상단 UI ---------------------- #
-st.markdown("""
-    <h1 style="text-align:center; color:white; font-size:3em;">💥 바탕화면 깨기 게임 💥</h1>
-    <div style="text-align:center; font-size:1.3em; color:lightgreen">
-    🏆 점수: {}점 &nbsp;&nbsp;&nbsp;&nbsp; 💥 깬 횟수: {}회
-    </div>
-""".format(st.session_state.score, st.session_state.crack_count), unsafe_allow_html=True)
+def is_game_over():
+    temp = st.session_state.board.copy()
+    for dir in ["left", "right", "up", "down"]:
+        st.session_state.board = temp.copy()
+        if move_left():
+            st.session_state.board = temp
+            return False
+        rotate_board(1)
+    st.session_state.board = temp
+    return True
 
-# ---------------------- 도구 선택 ---------------------- #
-cols = st.columns(len(TOOLS))
-for i, (tool_name, tool_data) in enumerate(TOOLS.items()):
-    with cols[i]:
-        if os.path.exists(tool_data["icon"]):
-            with open(tool_data["icon"], "rb") as f:
-                icon_b64 = base64.b64encode(f.read()).decode()
-            if st.button(f'<img src="data:image/png;base64,{icon_b64}" width="50">', key=tool_name, use_container_width=True):
-                st.session_state.tool = tool_name
+# -------------------- 방향 버튼 -------------------- #
+st.markdown("<br>", unsafe_allow_html=True)
+col1, col2, col3 = st.columns([1,2,1])
+with col2:
+    if st.button("⬆️ 위로"):
+        move("up")
+col1, col2, col3 = st.columns(3)
+with col1:
+    if st.button("⬅️ 왼쪽"):
+        move("left")
+with col2:
+    if st.button("🔄 새로 시작"):
+        del st.session_state.board
+        st.experimental_rerun()
+with col3:
+    if st.button("➡️ 오른쪽"):
+        move("right")
+col1, col2, col3 = st.columns([1,2,1])
+with col2:
+    if st.button("⬇️ 아래로"):
+        move("down")
 
-# ---------------------- 커서 이미지 적용 ---------------------- #
-tool_icon = TOOLS[st.session_state.tool]["icon"]
-if os.path.exists(tool_icon):
-    with open(tool_icon, "rb") as f:
-        tool_b64 = base64.b64encode(f.read()).decode()
-
-    st.markdown(f"""
-        <style>
-        body {{ cursor: none; }}
-        #tool-cursor {{
-            position: fixed;
-            z-index: 9999;
-            width: 80px;
-            pointer-events: none;
-        }}
-        </style>
-        <img id="tool-cursor" src="data:image/png;base64,{tool_b64}">
-        <script>
-        const cursor = document.getElementById("tool-cursor");
-        document.addEventListener("mousemove", e => {{
-            cursor.style.left = e.clientX + "px";
-            cursor.style.top = e.clientY + "px";
-        }});
-        </script>
-    """, unsafe_allow_html=True)
-
-# ---------------------- 클릭 시 깨기 효과 ---------------------- #
-st.markdown("<br><br><br>", unsafe_allow_html=True)
-click_area = st.empty()
-
-if click_area.button("💣 바탕화면 클릭해서 깨기!", use_container_width=True):
-    crack_image = TOOLS[st.session_state.tool]["crack"]
-    if os.path.exists(crack_image):
-        with open(crack_image, "rb") as f:
-            crack_b64 = base64.b64encode(f.read()).decode()
-        st.markdown(f"""
-            <img src="data:image/png;base64,{crack_b64}" style="position:absolute; top:{random.randint(100, 500)}px; left:{random.randint(100, 800)}px; width:150px; z-index:999;">
-        """, unsafe_allow_html=True)
-
-    st.session_state.score += random.randint(5, 20)
-    st.session_state.crack_count += 1
+# -------------------- 게임 오버 -------------------- #
+if is_game_over():
+    st.error("💀 게임 오버! 새로 시작을 눌러주세요.")
