@@ -1,108 +1,88 @@
 import streamlit as st
-import base64
 import random
-import os
+import time
+import streamlit.components.v1 as components
 
-st.set_page_config(layout="wide")
+# 초기 설정
+st.set_page_config(page_title="가위 바위 보 챌린지", page_icon="✊", layout="centered")
 
-# 세션 초기화
-if "cracks" not in st.session_state:
-    st.session_state.cracks = []
-if "score" not in st.session_state:
-    st.session_state.score = 0
-if "tool" not in st.session_state:
-    st.session_state.tool = "🔨 망치"
-if "crack_img" not in st.session_state:
-    st.session_state.crack_img = None
-if "sound_path" not in st.session_state:
-    st.session_state.sound_path = None
-if "tool_cursor" not in st.session_state:
-    st.session_state.tool_cursor = None
+# 배경음악
+audio_file = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+components.html(
+    f"""
+    <audio autoplay loop>
+      <source src="{audio_file}" type="audio/mp3">
+    </audio>
+    """,
+    height=0,
+)
 
-# 업로드: 깨진 흔적 이미지 (필수)
-st.sidebar.header("🖼 금 간 이미지 업로드")
-crack_file = st.sidebar.file_uploader("금 간 유리 PNG (투명 배경)", type=["png"])
-if crack_file:
-    st.session_state.crack_img = crack_file.read()
+# 세션 상태 초기화
+if "user_score" not in st.session_state:
+    st.session_state.user_score = 0
+if "computer_score" not in st.session_state:
+    st.session_state.computer_score = 0
+if "round_result" not in st.session_state:
+    st.session_state.round_result = ""
 
-# 업로드: 도구 아이콘 (선택)
-st.sidebar.markdown("🎯 커서 도구 이미지 (선택)")
-tool_cursor_file = st.sidebar.file_uploader("도구 이미지 PNG", type=["png"])
-if tool_cursor_file:
-    tool_cursor_bytes = tool_cursor_file.read()
-    st.session_state.tool_cursor = base64.b64encode(tool_cursor_bytes).decode()
+# 게임 설정
+choices = ["가위", "바위", "보"]
+emoji_map = {"가위": "✌", "바위": "✊", "보": "✋"}
+goal_score = st.slider("🎯 도전 모드: 몇 점 먼저 도달하면 승리?", 1, 10, 5)
 
-# 도구 사운드
-tool_sound = st.sidebar.selectbox("🔊 도구 소리 선택", options=["hammer", "gun", "ice", "rock"])
-sound_path = f"assets/sounds/{tool_sound}.mp3"
-if os.path.exists(sound_path):
-    st.session_state.sound_path = sound_path
+# 제목
+st.title("🔥 가위 바위 보 챌린지")
+st.markdown("가위✌ 바위✊ 보✋ 중 하나를 선택하세요!")
 
-# 배경 업로드
-bg = st.sidebar.file_uploader("🖼 배경 이미지 업로드", type=["jpg", "jpeg", "png"])
-if bg:
-    bg_bytes = bg.read()
-    bg_b64 = base64.b64encode(bg_bytes).decode()
-    st.markdown(
-        f"""<style>
-        .stApp {{
-            background-image: url("data:image/jpg;base64,{bg_b64}");
-            background-size: cover;
-            background-repeat: no-repeat;
-            background-position: center;
-        }}
-        </style>""",
-        unsafe_allow_html=True,
-    )
+# 사용자 선택
+user_choice = st.radio("당신의 선택은?", choices, index=None, horizontal=True)
 
-# 커서 스타일 적용
-if st.session_state.tool_cursor:
-    st.markdown(f"""
-    <style>
-    * {{
-        cursor: url("data:image/png;base64,{st.session_state.tool_cursor}"), auto;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+# 게임 실행
+if user_choice and st.button("대결 시작!"):
+    with st.spinner("컴퓨터가 선택 중..."):
+        time.sleep(1.2)
+        computer_choice = random.choice(choices)
 
-# 제목 및 점수
-st.markdown("""
-    <h1 style="text-align:center; color:white;">💥 바탕화면 깨기 게임</h1>
-    <p style="text-align:center; color:lightgreen;">🏆 점수: <strong>{}</strong>점 | 💥 깬 횟수: <strong>{}</strong>회</p>
-""".format(st.session_state.score, len(st.session_state.cracks)), unsafe_allow_html=True)
+    # 결과 출력
+    st.write(f"🙋‍♂️ 당신: {emoji_map[user_choice]} **{user_choice}**")
+    st.write(f"🤖 컴퓨터: {emoji_map[computer_choice]} **{computer_choice}**")
 
-# 클릭 감지 버튼
-clicked = st.button("🖱 화면 클릭 시 금 생성 (임시 구현용 버튼)")
+    if user_choice == computer_choice:
+        result = "😐 비겼습니다!"
+    elif (
+        (user_choice == "가위" and computer_choice == "보") or
+        (user_choice == "바위" and computer_choice == "가위") or
+        (user_choice == "보" and computer_choice == "바위")
+    ):
+        result = "🎉 당신이 이겼습니다!"
+        st.session_state.user_score += 1
+    else:
+        result = "💀 컴퓨터가 이겼습니다!"
+        st.session_state.computer_score += 1
 
-# 클릭 시 금 생성
-if clicked and st.session_state.crack_img:
-    x = random.randint(5, 85)
-    y = random.randint(5, 80)
-    encoded = base64.b64encode(st.session_state.crack_img).decode()
-    st.session_state.cracks.append({"x": x, "y": y, "img": encoded})
+    st.session_state.round_result = result
 
-    # 사운드
-    if st.session_state.sound_path:
-        with open(st.session_state.sound_path, "rb") as f:
-            sound_b64 = base64.b64encode(f.read()).decode()
-            st.markdown(f"""
-            <audio autoplay>
-                <source src="data:audio/mp3;base64,{sound_b64}" type="audio/mp3">
-            </audio>
-            """, unsafe_allow_html=True)
+# 결과 출력
+if st.session_state.round_result:
+    st.subheader(st.session_state.round_result)
 
-    # 점수 추가
-    st.session_state.score += 5
+# 점수판
+st.markdown("---")
+st.markdown(f"🏆 **스코어**  
+- 🙋‍♂️ 당신: `{st.session_state.user_score}` 점  
+- 🤖 컴퓨터: `{st.session_state.computer_score}` 점")
 
-# 금 이미지 표시
-for c in st.session_state.cracks:
-    st.markdown(f"""
-    <div style="position: fixed; top: {c['y']}%; left: {c['x']}%; z-index: 1000;">
-        <img src="data:image/png;base64,{c['img']}" width="150">
-    </div>
-    """, unsafe_allow_html=True)
+# 도전 모드 클리어 여부
+if st.session_state.user_score >= goal_score:
+    st.success(f"🎉 당신이 {goal_score}점에 먼저 도달하여 승리했습니다!")
+    if st.button("다시 시작하기"):
+        st.session_state.user_score = 0
+        st.session_state.computer_score = 0
+        st.session_state.round_result = ""
 
-# 리셋
-if st.sidebar.button("🔄 초기화"):
-    st.session_state.cracks = []
-    st.session_state.score = 0
+elif st.session_state.computer_score >= goal_score:
+    st.error(f"💀 컴퓨터가 {goal_score}점에 먼저 도달하여 당신은 패배했습니다!")
+    if st.button("다시 시작하기"):
+        st.session_state.user_score = 0
+        st.session_state.computer_score = 0
+        st.session_state.round_result = ""
