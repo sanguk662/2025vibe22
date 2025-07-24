@@ -2,70 +2,45 @@ import streamlit as st
 import time
 import random
 
-st.set_page_config(layout="centered")
-st.title("🦖 미니 공룡 달리기 게임")
+st.set_page_config("반응 속도 테스트", layout="centered")
+st.title("⚡ 반응 속도 테스트")
 
-# ------------------ 초기 설정 ------------------ #
-if "position" not in st.session_state:
-    st.session_state.position = 3  # 공룡 위치 (0~6)
-    st.session_state.obstacle = 6  # 장애물 시작 위치
-    st.session_state.jump = False
-    st.session_state.score = 0
-    st.session_state.game_over = False
-    st.session_state.jump_frame = 0
+if "phase" not in st.session_state:
+    st.session_state.phase = "ready"
+    st.session_state.start_time = 0
+    st.session_state.reaction_time = 0
+    st.session_state.wait_time = 0
 
-# ------------------ 화면 구성 ------------------ #
-def draw():
-    line = ["⬜"] * 7
-    if not st.session_state.jump:
-        line[st.session_state.position] = "🦖"
-    else:
-        line[st.session_state.position] = "⬛"
-    if st.session_state.obstacle == st.session_state.position and not st.session_state.jump:
-        st.session_state.game_over = True
-    else:
-        line[st.session_state.obstacle] = "🌵"
-    st.markdown("".join(line))
-    st.markdown(f"**점수: {st.session_state.score}**")
+def reset_game():
+    st.session_state.phase = "ready"
+    st.session_state.start_time = 0
+    st.session_state.reaction_time = 0
+    st.session_state.wait_time = 0
 
-# ------------------ 점프 처리 ------------------ #
-def trigger_jump():
-    if not st.session_state.jump:
-        st.session_state.jump = True
-        st.session_state.jump_frame = 2  # 점프 유지 프레임 수
-
-# ------------------ 프레임 처리 ------------------ #
-def next_frame():
-    if st.session_state.game_over:
-        return
-
-    st.session_state.obstacle -= 1
-    if st.session_state.obstacle < 0:
-        st.session_state.obstacle = 6
-        st.session_state.score += 1
-
-    if st.session_state.jump:
-        st.session_state.jump_frame -= 1
-        if st.session_state.jump_frame <= 0:
-            st.session_state.jump = False
-
-# ------------------ UI 구성 ------------------ #
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.button("🆙 점프", on_click=trigger_jump)
-
-placeholder = st.empty()
-
-draw()
-
-# ------------------ 게임 루프 ------------------ #
-if not st.session_state.game_over:
-    time.sleep(0.5)
-    next_frame()
-    st.experimental_rerun()
-else:
-    st.error(f"💀 게임 오버! 최종 점수: {st.session_state.score}")
-    if st.button("🔄 다시 시작"):
-        for key in ["position", "obstacle", "jump", "score", "game_over", "jump_frame"]:
-            del st.session_state[key]
+# 초기 상태
+if st.session_state.phase == "ready":
+    st.write("🖱️ 버튼을 누르고 기다리세요. 초록색이 되면 바로 클릭!")
+    if st.button("▶️ 시작"):
+        st.session_state.phase = "waiting"
+        st.session_state.wait_time = random.uniform(2, 5)
+        st.session_state.start_time = time.time()
         st.experimental_rerun()
+
+elif st.session_state.phase == "waiting":
+    elapsed = time.time() - st.session_state.start_time
+    if elapsed >= st.session_state.wait_time:
+        st.session_state.phase = "go"
+        st.session_state.start_time = time.time()
+        st.experimental_rerun()
+    else:
+        st.markdown("⏳ 기다리는 중... 준비하세요!")
+        if st.button("❌ 누르지 마세요!", key="early_click"):
+            st.error("너무 빨랐어요! 다시 시도하세요.")
+            reset_game()
+
+elif st.session_state.phase == "go":
+    if st.button("💥 지금 클릭!"):
+        reaction = time.time() - st.session_state.start_time
+        st.success(f"🎉 반응 속도: **{int(reaction * 1000)}ms**")
+        reset_game()
+
