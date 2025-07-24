@@ -1,118 +1,93 @@
 import streamlit as st
 import random
-import numpy as np
+import time
 
-st.set_page_config(layout="centered")
+st.set_page_config(page_title="폭탄 피하기 게임 💣", layout="wide")
+st.title("💣 폭탄 피하기 게임")
 
-st.title("2048 숫자 합치기 게임 🎮")
+# 게임 설정
+BOARD_WIDTH = 10
+BOARD_HEIGHT = 15
+BOMB_EMOJI = "💣"
+PLAYER_EMOJI = "😀"
 
-SIZE = 4
+if "player_x" not in st.session_state:
+    st.session_state.player_x = BOARD_WIDTH // 2
+    st.session_state.bombs = []
+    st.session_state.game_over = False
+    st.session_state.score = 0
+    st.session_state.last_update = time.time()
 
-# -------------------- 초기화 -------------------- #
-if "board" not in st.session_state:
-    st.session_state.board = np.zeros((SIZE, SIZE), dtype=int)
-    def place():
-        empty = list(zip(*np.where(st.session_state.board == 0)))
-        if empty:
-            i, j = random.choice(empty)
-            st.session_state.board[i][j] = 2 if random.random() < 0.9 else 4
-    place()
-    place()
+# 폭탄 생성 확률
+BOMB_PROB = 0.15
+UPDATE_INTERVAL = 0.5  # 초
 
-# -------------------- 보드 렌더링 -------------------- #
-def draw_board():
-    for i in range(SIZE):
-        cols = st.columns(SIZE)
-        for j in range(SIZE):
-            value = st.session_state.board[i][j]
-            cell = str(value) if value != 0 else ""
-            cols[j].button(cell, key=f"{i}-{j}", disabled=True)
+def new_frame():
+    # 폭탄 아래로 이동
+    new_bombs = []
+    for x, y in st.session_state.bombs:
+        if y + 1 < BOARD_HEIGHT:
+            new_bombs.append((x, y + 1))
+    st.session_state.bombs = new_bombs
 
-draw_board()
+    # 폭탄 새로 생성
+    for i in range(BOARD_WIDTH):
+        if random.random() < BOMB_PROB:
+            st.session_state.bombs.append((i, 0))
 
-# -------------------- 이동 처리 -------------------- #
-def move_left():
-    moved = False
-    for i in range(SIZE):
-        tiles = st.session_state.board[i][st.session_state.board[i] != 0]
-        new_row = []
-        skip = False
-        for j in range(len(tiles)):
-            if skip:
-                skip = False
-                continue
-            if j+1 < len(tiles) and tiles[j] == tiles[j+1]:
-                new_row.append(tiles[j]*2)
-                skip = True
-                moved = True
-            else:
-                new_row.append(tiles[j])
-        new_row += [0]*(SIZE - len(new_row))
-        if not np.array_equal(st.session_state.board[i], new_row):
-            moved = True
-        st.session_state.board[i] = new_row
-    return moved
+    # 충돌 체크
+    for x, y in st.session_state.bombs:
+        if y == BOARD_HEIGHT - 1 and x == st.session_state.player_x:
+            st.session_state.game_over = True
+            return
 
-def rotate_board(k):
-    st.session_state.board = np.rot90(st.session_state.board, k)
+    st.session_state.score += 1
 
-def move(direction):
-    if direction == "left":
-        moved = move_left()
-    elif direction == "right":
-        rotate_board(2)
-        moved = move_left()
-        rotate_board(2)
-    elif direction == "up":
-        rotate_board(1)
-        moved = move_left()
-        rotate_board(-1)
-    elif direction == "down":
-        rotate_board(-1)
-        moved = move_left()
-        rotate_board(1)
-    else:
-        moved = False
+# 키 조작 처리
+key = st.session_state.get("key")
+if key == "left" and st.session_state.player_x > 0:
+    st.session_state.player_x -= 1
+elif key == "right" and st.session_state.player_x < BOARD_WIDTH - 1:
+    st.session_state.player_x += 1
+st.session_state.key = None  # 초기화
 
-    if moved:
-        empty = list(zip(*np.where(st.session_state.board == 0)))
-        if empty:
-            i, j = random.choice(empty)
-            st.session_state.board[i][j] = 2 if random.random() < 0.9 else 4
+# 시간 경과 확인하여 업데이트
+if not st.session_state.game_over:
+    now = time.time()
+    if now - st.session_state.last_update > UPDATE_INTERVAL:
+        new_frame()
+        st.session_state.last_update = now
 
-def is_game_over():
-    temp = st.session_state.board.copy()
-    for dir in ["left", "right", "up", "down"]:
-        st.session_state.board = temp.copy()
-        if move_left():
-            st.session_state.board = temp
-            return False
-        rotate_board(1)
-    st.session_state.board = temp
-    return True
+# 보드 출력
+for y in range(BOARD_HEIGHT):
+    cols = st.columns(BOARD_WIDTH)
+    for x in range(BOARD_WIDTH):
+        cell = ""
+        if (x, y) in st.session_state.bombs:
+            cell = BOMB_EMOJI
+        elif y == BOARD_HEIGHT - 1 and x == st.session_state.player_x:
+            cell = PLAYER_EMOJI
+        cols[x].markdown(f"<div style='text-align:center; font-size:24px'>{cell}</div>", unsafe_allow_html=True)
 
-# -------------------- 방향 버튼 -------------------- #
-st.markdown("<br>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns([1,2,1])
-with col2:
-    if st.button("⬆️ 위로"):
-        move("up")
-col1, col2, col3 = st.columns(3)
-with col1:
+# 조작 버튼
+st.markdown("<hr>")
+c1, c2, c3 = st.columns([2, 1, 2])
+with c1:
     if st.button("⬅️ 왼쪽"):
-        move("left")
-with col2:
-    if st.button("🔄 새로 시작"):
-        del st.session_state.board
-        st.experimental_rerun()
-with col3:
+        st.session_state.key = "left"
+with c2:
+    st.markdown(f"**점수: {st.session_state.score}**")
+with c3:
     if st.button("➡️ 오른쪽"):
-        move("right")
-col1, col2, col3 = st.columns([1,2,1])
-with col2:
-    if st.button("⬇️ 아래로"):
-        move("down")
+        st.session_state.key = "right"
 
-# -------------------- 게임 오버 -------------------- #
-if is_game_over():
-    st.error("💀 게임 오버! 새로 시작을 눌러주세요.")
+# 게임 오버 처리
+if st.session_state.game_over:
+    st.error(f"💥 게임 오버! 최종 점수: {st.session_state.score}")
+    if st.button("🔄 다시 시작"):
+        for k in ["player_x", "bombs", "game_over", "score"]:
+            del st.session_state[k]
+        st.experimental_rerun()
+
+# 자동 새로고침
+st.experimental_rerun()
