@@ -5,14 +5,20 @@ import random
 st.set_page_config(layout="wide")
 st.title("🏃 미니 달리기 게임")
 
-# 초기 세션 상태
+# ✅ 필수 초기화: 세션 상태 변수들을 미리 선언
 if "player_pos" not in st.session_state:
     st.session_state.player_pos = 0
+if "obstacles" not in st.session_state:
     st.session_state.obstacles = []
+if "score" not in st.session_state:
     st.session_state.score = 0
+if "is_jumping" not in st.session_state:
     st.session_state.is_jumping = False
+if "jump_start_time" not in st.session_state:
     st.session_state.jump_start_time = None
+if "game_over" not in st.session_state:
     st.session_state.game_over = False
+if "speed" not in st.session_state:
     st.session_state.speed = 0.2
 
 # 점프 처리
@@ -62,7 +68,7 @@ def reset_game():
     st.session_state.game_over = False
     st.session_state.speed = 0.2
 
-# 게임 루프 실행 버튼
+# 조작 버튼
 col1, col2 = st.columns([1, 2])
 with col1:
     if st.button("⏫ 점프"):
@@ -71,7 +77,7 @@ with col2:
     if st.button("🔄 새로 시작"):
         reset_game()
 
-# 게임 루프 실행
+# 게임 루프
 if not st.session_state.game_over:
     placeholder = st.empty()
     while not st.session_state.game_over:
@@ -81,7 +87,7 @@ if not st.session_state.game_over:
         move_obstacles()
         check_collision()
 
-        # 점프 시간 1초 유지
+        # 점프 1초 유지
         if st.session_state.is_jumping and time.time() - st.session_state.jump_start_time > 1:
             st.session_state.is_jumping = False
 
@@ -89,4 +95,4 @@ if not st.session_state.game_over:
         time.sleep(st.session_state.speed)
         st.rerun()
 else:
-    st.error("💀 게임 오버!")
+    st.error("💥 게임 오버! 새로 시작을 눌러보세요.")
